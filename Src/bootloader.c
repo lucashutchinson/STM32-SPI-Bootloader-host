@@ -4,7 +4,7 @@
 SPI_HandleTypeDef *SpiHandle;
 
 static void wait_for_ack(void);
-static uint8_t xor_checksum(const uint8_t pData[], uint8_t len);
+static uint8_t xor_checksum(const uint8_t pData[], uint16_t len);
 
 /**
   * @brief  Initialize the SPI Bootloader host with the associated SPI handle
@@ -135,7 +135,7 @@ void BL_ReadMemory_Command(uint32_t address, uint8_t nob, uint8_t *pData)
   uint8_t addr_frame[5];
   uint8_t nob_frame[2];
   uint8_t dummy = 0x00U;
-
+  uint16_t nobrx = nob+1;
   /* Send start of frame (0x5A) + Read Memory command frame (0x11 0xEE) */
   cmd_frame[0] = BL_SPI_SOF;
   cmd_frame[1] = RMEM_COMMAND;
@@ -157,8 +157,8 @@ void BL_ReadMemory_Command(uint32_t address, uint8_t nob, uint8_t *pData)
   wait_for_ack();
 
   /* Send data frame: number of Bytes to be read (1 Byte) + checksum (1 Byte) */
-  nob_frame[0] = (nob - 1U);
-  nob_frame[1] = (nob - 1U) ^ 0xFFU;
+  nob_frame[0] = (nob);
+  nob_frame[1] = (nob) ^ 0xFFU;
   HAL_SPI_Transmit(SpiHandle, nob_frame, 2U, 1000U);
 
   /* Wait for ACK or NACK frame */
@@ -166,7 +166,7 @@ void BL_ReadMemory_Command(uint32_t address, uint8_t nob, uint8_t *pData)
 
   /* Receive data frame: data from the Bootloader */
   HAL_SPI_Transmit(SpiHandle, &dummy, 1U, 1000U);
-  HAL_SPI_Receive(SpiHandle, pData, (uint16_t) nob, 1000U);
+  HAL_SPI_Receive(SpiHandle, pData, (uint16_t) nobrx, 1000U);
 }
 
 /**
@@ -212,8 +212,9 @@ void BL_WriteMemory_Command(uint32_t address, uint8_t nob, uint8_t *pData)
 {
   uint8_t cmd_frame[3];
   uint8_t addr_frame[5];
-  uint8_t n = nob - 1U;
-  uint8_t checksum = xor_checksum(pData, nob) ^ n;
+  uint8_t n = nob;
+  uint16_t nobtx = nob+1;
+  uint8_t checksum = xor_checksum(pData, nobtx) ^ n;
 
   /* Send start of frame (0x5A) + Write Memory command frame (0x21 0xDE) */
   cmd_frame[0] = BL_SPI_SOF;
@@ -238,7 +239,7 @@ void BL_WriteMemory_Command(uint32_t address, uint8_t nob, uint8_t *pData)
   /* Send data frame: N number of Bytes to be written (1 Byte),
      N + 1 data Bytes and a checksum (1 Byte) */
   HAL_SPI_Transmit(SpiHandle, &n, 1U, 1000U);
-  HAL_SPI_Transmit(SpiHandle, pData, (uint16_t) nob, 1000U);
+  HAL_SPI_Transmit(SpiHandle, pData, (uint16_t) nobtx, 1000U);
   HAL_SPI_Transmit(SpiHandle, &checksum, 1U, 1000U);
 
   /* Wait for ACK or NACK frame */
@@ -440,14 +441,15 @@ static void wait_for_ack(void)
   }
 }
 
-static uint8_t xor_checksum(const uint8_t pData[], uint8_t len)
+static uint8_t xor_checksum(const uint8_t pData[], uint16_t len)
 {
   uint8_t sum = *pData;
 
-  for (uint8_t i = 1U; i < len; i++)
+  for (uint16_t i = 1U; i < len; i++)
   {
     sum ^= pData[i];
   }
 
   return sum;
 }
+
